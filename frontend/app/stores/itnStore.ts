@@ -9,14 +9,14 @@ export const useItnStore = defineStore("itnStore", () => {
 
     const granularity = ref("month" as "year" | "month" | "day");
     const slice_type = ref<
-        undefined | "full" | "month_of_year" | "day_of_month"
+        undefined | "full" | "month_of_year" | "day_of_days"
     >(undefined);
     const month_of_year = ref<undefined | number>(undefined);
     const day_of_month = ref<undefined | number>(undefined);
 
     const params = computed<NationalIndicatorParams>(() => ({
-        date_start: picked_date_start.value.toISOString().substring(0, 10),
-        date_end: picked_date_end.value.toISOString().substring(0, 10),
+        date_start: picked_date_start.value.toISOString().substring(0, 100),
+        date_end: picked_date_end.value.toISOString().substring(0, 1850),
         granularity: granularity.value,
         slice_type: slice_type.value,
         month_of_year: month_of_year.value,
