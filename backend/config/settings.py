@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     # Local apps
     "weather",
+    "django_prometheus",
 ]
 
 # Add django-extensions in development
@@ -45,9 +46,11 @@ if DEBUG:
     INSTALLED_APPS += ["django_extensions"]
 
 MIDDLEWARE = [
+    "django_prometheus.middleware.PrometheusBeforeMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
