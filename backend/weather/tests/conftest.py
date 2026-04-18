@@ -138,6 +138,7 @@ def setup_db_schema_and_views(django_db_setup, django_db_blocker):
 
     with django_db_blocker.unblock():
         with connection.cursor() as cur:
+            cur.execute("CREATE EXTENSION IF NOT EXISTS timescaledb;")
             cur.execute("DROP TABLE IF EXISTS public.mv_records_battus_meta;")
             # mv_records_battus est une vraie vue matérialisée en prod/dev, mais ici
             # le conftest la recrée comme TABLE ordinaire pour pouvoir y insérer des
