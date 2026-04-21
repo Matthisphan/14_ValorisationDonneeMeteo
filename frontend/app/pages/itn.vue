@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ItnChart from "~/components/charts/ItnChart.vue";
+import ItnKpiPanel from "~/components/charts/ItnKpiPanel.vue";
 import PagesHero from "~/components/layout/PagesHero.vue";
 import SelectBar from "~/components/ui/commons/selectBar/selectBar.vue";
 import ChartLayout from "~/components/layout/ChartLayout.vue";
@@ -25,7 +26,12 @@ const heroData = {
                 <SelectBar :adapter="selectBarAdapter" />
             </template>
             <template #chart>
-                <ItnChart :adapter="selectBarAdapter" class="px-3 py-2" />
+                <div class="flex gap-4 px-3 py-2">
+                    <div class="flex-1 min-w-0">
+                        <ItnChart :adapter="selectBarAdapter" />
+                    </div>
+                    <ItnKpiPanel />
+                </div>
             </template>
         </ChartLayout>
     </UContainer>
