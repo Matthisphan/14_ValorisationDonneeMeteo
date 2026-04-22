@@ -1,20 +1,104 @@
 <script setup lang="ts">
 import PagesHero from "~/components/layout/PagesHero.vue";
 import RecordsTable from "~/components/table/records/recordsTable.vue";
+import ChartLayout from "~/components/layout/ChartLayout.vue";
+import SearchByTerritoryType from "~/components/records/SearchByTerritoryType.vue";
+import { useRecordsSelectBarAdapter } from "~/adapters/recordsSelectBarAdapter";
+import RecordsChart from "~/components/charts/recordsChart.vue";
+import SelectBar from "~/components/ui/commons/selectBar/selectBar.vue";
+import RecordsMap from "~/components/map/RecordsMap.vue";
+import {
+    useRecordsTableStore,
+    periodOptions,
+} from "~/stores/recordsTableStore";
+
+const selectBarAdapter = useRecordsSelectBarAdapter();
+
+const store = useRecordsTableStore();
 
 const heroData = {
     title: "Records",
     description:
-        "Tableau des stations météo ayant enregistrées un record de température sur une période donnée.",
+        "Les records de température correspondent aux valeurs extrêmes — maximales ou minimales — mesurées depuis la création d'une station disposant d'au moins 20 ans de données.",
 };
 </script>
 
 <template>
-    <UContainer>
+    <UContainer class="flex flex-col gap-y-16">
         <PagesHero
             :title="heroData.title"
             :description="heroData.description"
         />
-        <RecordsTable />
+        <div class="flex gap-24 flex-col">
+            <div class="flex flex-col gap-4">
+                <div class="flex items-end gap-4">
+                    <div class="flex flex-col gap-1">
+                        <p class="text-sm text-muted">Période</p>
+                        <USelect
+                            v-model="store.periodSelection"
+                            :items="periodOptions"
+                        />
+                    </div>
+                    <UButtonGroup>
+                        <UButton
+                            color="neutral"
+                            :variant="
+                                store.typeRecords === 'hot'
+                                    ? 'subtle'
+                                    : 'outline'
+                            "
+                            label="Chaud"
+                            @click="store.typeRecords = 'hot'"
+                        />
+                        <UButton
+                            color="neutral"
+                            :variant="
+                                store.typeRecords === 'cold'
+                                    ? 'subtle'
+                                    : 'outline'
+                            "
+                            label="Froid"
+                            @click="store.typeRecords = 'cold'"
+                        />
+                    </UButtonGroup>
+                </div>
+
+                <hr class="border-accented" />
+
+                <div class="flex flex-col md:flex-row items-start gap-8">
+                    <ClientOnly>
+                        <RecordsMap />
+                    </ClientOnly>
+                    <div class="flex flex-col flex-1 min-w-0 gap-4">
+                        <RecordsTable />
+                    </div>
+                </div>
+            </div>
+
+            <ChartLayout :has-sidebar="true">
+                <template #select-bar>
+                    <SelectBar :adapter="selectBarAdapter" />
+                </template>
+                <template #sidebar>
+                    <SearchByTerritoryType />
+                </template>
+                <template #chart>
+                    <div class="flex flex-col gap-4 px-3 py-2">
+                        <UTabs
+                            v-model="selectBarAdapter.recordKind!.value"
+                            :items="[
+                                { label: 'Records absolus', value: 'absolute' },
+                                {
+                                    label: 'Records battus',
+                                    value: 'historical',
+                                },
+                            ]"
+                            class="w-fit"
+                        />
+                        <RecordsChart :adapter="selectBarAdapter" />
+                    </div>
+                </template>
+            </ChartLayout>
+        </div>
     </UContainer>
 </template>

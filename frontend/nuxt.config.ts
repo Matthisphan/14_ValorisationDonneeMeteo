@@ -33,9 +33,12 @@ export default defineNuxtConfig({
     fonts: {
         provider: "google",
     },
+    typescript: {
+        typeCheck: false, // turn to true when calm and ready
+    },
     app: {
         head: {
-            title: "InfoClimat - Dashboard",
+            title: "DataClimat - Dashboard",
             htmlAttrs: {
                 lang: "fr",
             },
@@ -50,8 +53,15 @@ export default defineNuxtConfig({
     },
     echarts: {
         renderer: ["svg", "canvas"],
-        charts: ["BarChart", "LineChart"],
-        components: ["DatasetComponent", "GridComponent", "TooltipComponent"],
+        charts: ["BarChart", "LineChart", "ScatterChart"],
+        components: [
+            "DatasetComponent",
+            "GridComponent",
+            "TooltipComponent",
+            "TitleComponent",
+            "LegendComponent",
+            "DataZoomComponent",
+        ],
         features: ["LabelLayout", "UniversalTransition"],
     },
     primevue: {

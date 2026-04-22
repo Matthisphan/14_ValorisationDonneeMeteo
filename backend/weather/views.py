@@ -8,26 +8,41 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from weather.bootstrap_itn import ITNDependencyProvider
+from weather.bootstrap_records_graph import RecordsGraphDependencyProvider
 from weather.bootstrap_temperature_deviation import (
     TemperatureDeviationDependencyProvider,
+    TemperatureDeviationOverviewDependencyProvider,
 )
-from weather.data_sources.records_fake import FakeRecordsDataSource
+from weather.bootstrap_temperature_records import TemperatureRecordsDependencyProvider
+from weather.services.national_indicator.kpi_use_case import get_national_indicator_kpi
 from weather.services.national_indicator.use_case import get_national_indicator
-from weather.services.records.use_case import get_records
-from weather.services.temperature_deviation.use_case import get_temperature_deviation
+from weather.services.records_graph.types import RecordsGraphRequest
+from weather.services.records_graph.use_case import get_records_graph
+from weather.services.temperature_deviation.use_case import (
+    get_temperature_deviation,
+    get_temperature_deviation_overview,
+)
+from weather.services.temperature_records.types import TemperatureRecordsRequest
+from weather.services.temperature_records.use_case import get_temperature_records
 
 from .filters import StationFilter
 from .models import Station
 from .serializers import (
     ErrorSerializer,
+    NationalIndicatorKpiQuerySerializer,
+    NationalIndicatorKpiResponseSerializer,
     NationalIndicatorQuerySerializer,
     NationalIndicatorResponseSerializer,
+    RecordsGraphQuerySerializer,
+    RecordsGraphResponseSerializer,
     StationDetailSerializer,
     StationSerializer,
-    TemperatureDeviationQuerySerializer,
+    TemperatureDeviationGraphQuerySerializer,
+    TemperatureDeviationOverviewQuerySerializer,
+    TemperatureDeviationOverviewResponseSerializer,
     TemperatureDeviationResponseSerializer,
+    TemperatureRecordEntrySerializer,
     TemperatureRecordsQuerySerializer,
-    TemperatureRecordsResponseSerializer,
 )
 
 
@@ -84,8 +99,12 @@ class NationalIndicatorAPIView(APIView):
             )
 
         params = q.validated_data
-        ds = ITNDependencyProvider.get_dep()
-        data = get_national_indicator(data_source=ds, **params)
+        deps = ITNDependencyProvider.get_dep()
+        data = get_national_indicator(
+            observed_data_source=deps.observed_data_source,
+            baseline_data_source=deps.baseline_data_source,
+            **params,
+        )
         metadata = {
             "date_start": params["date_start"],
             "date_end": params["date_end"],
@@ -110,9 +129,9 @@ class NationalIndicatorAPIView(APIView):
         return Response(out.data, status=status.HTTP_200_OK)
 
 
-class TemperatureDeviationAPIView(APIView):
+class TemperatureDeviationGraphAPIView(APIView):
     """
-    GET /api/v1/temperature/deviation
+    GET /api/v1/temperature/deviation/graph
     Implémentation mock, alignée sur le pattern ITN.
     """
 
@@ -120,7 +139,7 @@ class TemperatureDeviationAPIView(APIView):
     permission_classes = []
 
     def get(self, request):
-        q = TemperatureDeviationQuerySerializer(data=request.query_params)
+        q = TemperatureDeviationGraphQuerySerializer(data=request.query_params)
         if not q.is_valid():
             return Response(
                 ErrorSerializer.build(
@@ -143,13 +162,22 @@ class TemperatureDeviationAPIView(APIView):
                 ),
                 status=status.HTTP_501_NOT_IMPLEMENTED,
             )
+        metadata = {
+            "date_start": params["date_start"],
+            "date_end": params["date_end"],
+            "baseline": "1991-2020",
+            "granularity": params["granularity"],
+            "slice_type": params.get("slice_type", "full"),
+        }
+
+        if "month_of_year" in params:
+            metadata["month_of_year"] = params["month_of_year"]
+
+        if "day_of_month" in params:
+            metadata["day_of_month"] = params["day_of_month"]
+
         full_payload = {
-            "metadata": {
-                "date_start": params["date_start"],
-                "date_end": params["date_end"],
-                "baseline": "1991-2020",
-                "granularity": params["granularity"],
-            },
+            "metadata": metadata,
             **data,
         }
 
@@ -159,11 +187,10 @@ class TemperatureDeviationAPIView(APIView):
         return Response(out.data, status=status.HTTP_200_OK)
 
 
-class RecordsAPIView(APIView):
+class TemperatureRecordsAPIView(APIView):
     """
     GET /api/v1/temperature/records
-
-    implémentation données mockées
+    Retourne les records absolus de température par station.
     """
 
     authentication_classes = []
@@ -180,23 +207,227 @@ class RecordsAPIView(APIView):
                 ),
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        params = q.validated_data
+        ds = TemperatureRecordsDependencyProvider.get_dep()
+
+        req = TemperatureRecordsRequest(
+            period_type=params["period_type"],
+            type_records=params["type_records"],
+            month=params.get("month"),
+            season=params.get("season"),
+            date_start=params.get("date_start"),
+            date_end=params.get("date_end"),
+            territoire=params.get("territoire"),
+            territoire_id=params.get("territoire_id"),
+        )
+
+        try:
+            entries = get_temperature_records(request=req, data_source=ds)
+        except ValueError as exc:
+            return Response(
+                ErrorSerializer.build(
+                    code="INVALID_PARAMETER",
+                    message=str(exc),
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = TemperatureRecordEntrySerializer(
+            [
+                {
+                    "station_id": e.station_id,
+                    "station_name": e.station_name,
+                    "department": e.department,
+                    "record_value": e.record_value,
+                    "record_date": e.record_date,
+                    "lat": e.lat,
+                    "lon": e.lon,
+                    "alt": e.alt,
+                }
+                for e in entries
+            ],
+            many=True,
+        )
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class TemperatureDeviationOverviewAPIView(APIView):
+    """
+    GET /api/v1/temperature/deviation
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        q = TemperatureDeviationOverviewQuerySerializer(data=request.query_params)
+        if not q.is_valid():
+            return Response(
+                ErrorSerializer.build(
+                    code="INVALID_PARAMETER",
+                    message="Paramètre invalide ou manquant",
+                    details=q.errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         params = q.validated_data
 
-        ds = FakeRecordsDataSource()
-        stations = get_records(data_source=ds, **params)
+        ds = TemperatureDeviationOverviewDependencyProvider.get_dep()
+
+        data = get_temperature_deviation_overview(
+            data_source=ds,
+            **params,
+        )
+
         full_payload = {
             "metadata": {
-                "date_start": params.get("date_start"),
-                "date_end": params.get("date_end"),
-                "record_kind": params["record_kind"],
-                "record_scope": params["record_scope"],
-                "type_records": params["type_records"],
-                "station_ids": list(params.get("station_ids", ())),
-                "departments": list(params.get("departments", ())),
-                "temperature_min": params.get("temperature_min"),
-                "temperature_max": params.get("temperature_max"),
+                "date_start": params["date_start"],
+                "date_end": params["date_end"],
+                "baseline": "1991-2020",
+                "filters": {
+                    "station_search": params.get("station_search"),
+                    "station_ids": list(params.get("station_ids", ())),
+                    "temperature_mean_min": params.get("temperature_mean_min"),
+                    "temperature_mean_max": params.get("temperature_mean_max"),
+                    "deviation_min": params.get("deviation_min"),
+                    "deviation_max": params.get("deviation_max"),
+                    "alt_min": params.get("alt_min"),
+                    "alt_max": params.get("alt_max"),
+                    "departments": list(params.get("departments", ())),
+                    "regions": list(params.get("regions", ())),
+                },
+                "ordering": params.get("ordering", "-deviation"),
             },
-            "stations": stations,
+            **data,
         }
-        out = TemperatureRecordsResponseSerializer(full_payload)
+
+        out = TemperatureDeviationOverviewResponseSerializer(data=full_payload)
+        out.is_valid(raise_exception=True)
+
         return Response(out.data, status=status.HTTP_200_OK)
+
+
+class NationalIndicatorKpiAPIView(APIView):
+    """
+    GET /api/v1/temperature/national-indicator/kpi
+    Retourne les jours de pic chaud ou froid sur une période donnée.
+    Un pic = jour où l'ITN dépasse la moyenne ± écart-type de la baseline 1991-2020.
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        q = NationalIndicatorKpiQuerySerializer(data=request.query_params)
+        if not q.is_valid():
+            return Response(
+                ErrorSerializer.build(
+                    code="INVALID_PARAMETER",
+                    message="Paramètre invalide ou manquant",
+                    details=q.errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        params = q.validated_data
+        deps = ITNDependencyProvider.get_dep()
+
+        result = get_national_indicator_kpi(
+            observed_data_source=deps.observed_data_source,
+            baseline_data_source=deps.baseline_data_source,
+            date_start=params["date_start"],
+            date_end=params["date_end"],
+            peak_type=params.get("type"),
+        )
+
+        payload = {
+            "count": result.count,
+            "itn_mean": result.itn_mean,
+            "deviation_from_normal": result.deviation_from_normal,
+            "days": [
+                {
+                    "date": d.date,
+                    "temperature": d.temperature,
+                    "baseline_mean": d.baseline_mean,
+                    "baseline_std_dev": d.baseline_std_dev,
+                }
+                for d in result.days
+            ],
+        }
+
+        out = NationalIndicatorKpiResponseSerializer(data=payload)
+        out.is_valid(raise_exception=True)
+
+        return Response(out.data, status=status.HTTP_200_OK)
+
+
+class RecordsGraphAPIView(APIView):
+    """
+    GET /api/v1/temperature/records/graph
+    Retourne les records de température battus : compte par bucket (histogramme)
+    et liste des records individuels (scatter plot).
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        q = RecordsGraphQuerySerializer(data=request.query_params)
+        if not q.is_valid():
+            return Response(
+                ErrorSerializer.build(
+                    code="INVALID_PARAMETER",
+                    message="Paramètre invalide ou manquant",
+                    details=q.errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        params = q.validated_data
+        ds = RecordsGraphDependencyProvider.get_dep()
+
+        req = RecordsGraphRequest(
+            date_start=params["date_start"],
+            date_end=params["date_end"],
+            granularity=params["granularity"],
+            period_type=params["period_type"],
+            type_records=params["type_records"],
+            month=params.get("month"),
+            season=params.get("season"),
+            territoire=params.get("territoire"),
+            territoire_id=params.get("territoire_id"),
+        )
+
+        try:
+            result = get_records_graph(request=req, data_source=ds)
+        except ValueError as exc:
+            return Response(
+                ErrorSerializer.build(
+                    code="INVALID_PARAMETER",
+                    message=str(exc),
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = RecordsGraphResponseSerializer(
+            {
+                "buckets": [
+                    {"bucket": b.bucket, "nb_records_battus": b.nb_records_battus}
+                    for b in result.buckets
+                ],
+                "records": [
+                    {
+                        "date": r.date,
+                        "station_id": r.station_id,
+                        "station_name": r.station_name,
+                        "type_records": r.type_records,
+                        "valeur": r.valeur,
+                    }
+                    for r in result.records
+                ],
+            }
+        )
+        return Response(serializer.data, status=status.HTTP_200_OK)

@@ -1,18 +1,25 @@
-import type { DeviationParams, Station } from "~/types/api";
-import { useCustomDate } from "#imports";
+import type {
+    TemperatureDeviationGraphParams,
+    Station,
+    TemperatureDeviationGraphResponse,
+    TemperatureDeviationGraphStationSerie,
+} from "~/types/api";
+import { useCustomDate, dateToStringYMD } from "#imports";
 import type {
     GranularityType,
     SliceType,
     ChartType,
 } from "~/components/ui/commons/selectBar/types";
+import type { DeviationStationIdAndName } from "~/types/common";
 
 const dates = useCustomDate();
 
 export const useDeviationStore = defineStore("deviationStore", () => {
     const deviationChartRef = shallowRef();
 
-    const pickedDateStart = ref(dates.lastYear.value);
-    const pickedDateEnd = ref(dates.twoDaysAgo.value);
+    const pickedDateStart = ref(dates.last10Year.value);
+    const pickedDateEnd = ref(dates.yesterday.value);
+    const maxDate = ref(dates.yesterday.value);
 
     const granularity: Ref<GranularityType> = ref<GranularityType>("month");
     const sliceTypeSwitchEnabled = ref(false);
@@ -27,29 +34,87 @@ export const useDeviationStore = defineStore("deviationStore", () => {
     const selectedStations = ref<Station[]>([]);
     const includeNational = ref<boolean>(true);
 
-    const params = computed<DeviationParams>(() => ({
-        date_start: pickedDateStart.value
-            .toISOString()
-            .substring(0, "YYYY-MM-DD".length),
-        date_end: pickedDateEnd.value
-            .toISOString()
-            .substring(0, "YYYY-MM-DD".length),
-        granularity: granularity.value,
+    const isGranularityYear = computed<boolean>(
+        () => granularity.value === "year",
+    );
+
+    const month_of_year = computed<undefined | number>(() =>
+        granularity.value === "year" && sliceType.value !== "full"
+            ? sliceDatepickerDate.value.getMonth() + 1
+            : undefined,
+    );
+
+    const day_of_month = computed<undefined | number>(() =>
+        sliceType.value === "day_of_month"
+            ? sliceDatepickerDate.value.getDate()
+            : undefined,
+    );
+
+    const selectedStationsAndNational = computed<DeviationStationIdAndName[]>(
+        () => {
+            const stations = selectedStations.value.map((station) => {
+                return {
+                    station_id: station.code,
+                    station_name: `${station.nom} (${station.departement})`,
+                    departement: String(station.departement),
+                };
+            });
+
+            return includeNational.value
+                ? [
+                      {
+                          station_id: "national",
+                          station_name: "France Métropolitaine",
+                          departement: "",
+                      },
+                      ...stations,
+                  ]
+                : stations;
+        },
+    );
+
+    const params = computed<TemperatureDeviationGraphParams>(() => ({
+        date_start: dateToStringYMD(pickedDateStart.value),
+        date_end: dateToStringYMD(pickedDateEnd.value),
+        granularity:
+            chartType.value === "calendar"
+                ? granularity.value === "month"
+                    ? "day" // calendrier mois → données journalières (y-axis = jours)
+                    : "month" // calendrier année → données mensuelles (y-axis = mois)
+                : granularity.value,
         station_ids: stationIds.value.join(","),
         include_national: includeNational.value,
+        slice_type: sliceType.value,
+        month_of_year: month_of_year.value,
+        day_of_month: day_of_month.value,
     }));
 
     const {
         data: deviationData,
         pending,
         error,
-    } = useTemperatureDeviation(params);
+    } = useTemperatureDeviationGraph(params);
 
     const setGranularity = (value: GranularityType) => {
         sliceType.value = "full";
         granularity.value = value;
+        pickedDateEnd.value = dates.yesterday.value;
+        maxDate.value = dates.yesterday.value;
         if (value === "day") {
             sliceTypeSwitchEnabled.value = false;
+            pickedDateStart.value = dates.lastYear.value;
+        }
+        if (value === "month") {
+            pickedDateStart.value = dates.last10Year.value;
+        }
+        if (value === "year") {
+            pickedDateStart.value = dates.absoluteMinDataDate.value;
+        }
+    };
+
+    const turnOffSliceType = (value: boolean) => {
+        if (!value) {
+            sliceType.value = "full";
         }
     };
 
@@ -62,10 +127,39 @@ export const useDeviationStore = defineStore("deviationStore", () => {
         selectedStations.value = stations;
     };
 
+    const setIncludeNational = (value: boolean) => {
+        includeNational.value = value;
+    };
+
+    const stationsAndNationalFormatted = (
+        chartData: TemperatureDeviationGraphResponse,
+    ): TemperatureDeviationGraphStationSerie[] => {
+        return includeNational.value
+            ? [
+                  {
+                      station_id: "national",
+                      station_name: "France Métropolitaine",
+                      departement: "75",
+                      ...chartData.national,
+                  },
+                  ...chartData.stations,
+              ]
+            : chartData.stations;
+    };
+
+    watch(isGranularityYear, (value) => {
+        if (value) {
+            pickedDateStart.value = setToFirstDayOfYear(pickedDateStart.value);
+            pickedDateEnd.value = setToLastDayOfYear(pickedDateEnd.value);
+        }
+    });
+
     return {
         deviationChartRef,
+        includeNational,
         pickedDateStart,
         pickedDateEnd,
+        maxDate,
         granularity,
         sliceTypeSwitchEnabled,
         sliceType,
@@ -73,11 +167,14 @@ export const useDeviationStore = defineStore("deviationStore", () => {
         chartTypeSwitchEnabled,
         chartType,
         setGranularity,
+        turnOffSliceType,
+        setIncludeNational,
         setChartType,
         setStations,
+        stationsAndNationalFormatted,
         stationIds,
         selectedStations,
-        includeNational,
+        selectedStationsAndNational,
         deviationData,
         pending,
         error,

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from "@nuxt/ui";
 import type { SelectBarAdapter } from "./selectBar/types";
+import { COLORS } from "~/constants/colors";
 
 const adapter = inject<SelectBarAdapter>("selectBarAdapter")!;
 const { exportConfig, chartRef, granularity, pickedDateStart, pickedDateEnd } =
@@ -13,6 +14,22 @@ const exportMenuItems = ref<DropdownMenuItem[]>([
         onSelect(e: Event) {
             e.preventDefault();
             exportAsPng();
+        },
+    },
+    {
+        label: "Format PNG sans fond",
+        icon: "i-lucide-file-image",
+        onSelect(e: Event) {
+            e.preventDefault();
+            exportAsPngWithoutBackground();
+        },
+    },
+    {
+        label: "Format PNG fond blanc",
+        icon: "i-lucide-file-image",
+        onSelect(e: Event) {
+            e.preventDefault();
+            exportAsPngWhiteBackground();
         },
     },
     {
@@ -35,10 +52,11 @@ const exportMenuItems = ref<DropdownMenuItem[]>([
 
 function exportAsPng() {
     if (!import.meta.client) return;
-    const dataURL = chartRef?.value.getDataURL({
+    if (!chartRef?.value) return;
+    const dataURL = chartRef.value.getDataURL({
         type: "png",
         pixelRatio: 2,
-        backgroundColor: "#fff",
+        backgroundColor: COLORS.background,
         excludeComponents: ["dataZoom"],
     });
 
@@ -47,9 +65,53 @@ function exportAsPng() {
     a.download = useFormatFileName(
         exportConfig.chartName,
         granularity.value,
+        "png",
         pickedDateStart.value,
         pickedDateEnd.value,
+    );
+    a.click();
+}
+
+function exportAsPngWithoutBackground() {
+    if (!import.meta.client) return;
+    if (!chartRef?.value) return;
+    const dataURL = chartRef.value.getDataURL({
+        type: "png",
+        pixelRatio: 2,
+        backgroundColor: "transparent",
+        excludeComponents: ["dataZoom"],
+    });
+
+    const a = document.createElement("a");
+    a.href = dataURL;
+    a.download = useFormatFileName(
+        exportConfig.chartName,
+        granularity.value,
         "png",
+        pickedDateStart.value,
+        pickedDateEnd.value,
+    );
+    a.click();
+}
+
+function exportAsPngWhiteBackground() {
+    if (!import.meta.client) return;
+    if (!chartRef?.value) return;
+    const dataURL = chartRef.value.getDataURL({
+        type: "png",
+        pixelRatio: 2,
+        backgroundColor: "#ffffff",
+        excludeComponents: ["dataZoom"],
+    });
+
+    const a = document.createElement("a");
+    a.href = dataURL;
+    a.download = useFormatFileName(
+        exportConfig.chartName,
+        granularity.value,
+        "png",
+        pickedDateStart.value,
+        pickedDateEnd.value,
     );
     a.click();
 }
@@ -68,16 +130,17 @@ function exportAsCSV() {
     a.download = useFormatFileName(
         exportConfig.chartName,
         granularity.value,
+        "csv",
         pickedDateStart.value,
         pickedDateEnd.value,
-        "csv",
     );
     a.click();
 }
 
 function exportAsHTML() {
     if (!import.meta.client) return;
-    const options = chartRef?.value.getOption();
+    if (!chartRef?.value) return;
+    const options = chartRef.value.getOption();
     const scriptTag = "script";
     const html = `<!DOCTYPE html>
 <html>
@@ -102,9 +165,9 @@ function exportAsHTML() {
     a.download = useFormatFileName(
         "itn",
         granularity.value,
+        "html",
         pickedDateStart.value,
         pickedDateEnd.value,
-        "html",
     );
     a.click();
 }

@@ -1,35 +1,18 @@
 <script setup lang="ts">
 import { refDebounced, useIntersectionObserver } from "@vueuse/core";
-import type { PaginatedResponse, Station } from "~/types/api";
+import type { Station } from "~/types/api";
 
 const deviationStore = useDeviationStore();
-const { selectedStations } = storeToRefs(deviationStore);
+const { includeNational, selectedStations } = storeToRefs(deviationStore);
 
 const searchQuery = ref<undefined | string>(undefined);
-const page = ref<number>(0);
-const allStations = ref<Station[]>([]);
-const hasMore = ref<boolean>(false);
+const debouncedSearch = refDebounced(searchQuery, 300);
 
 const params = computed(() => ({
-    search: searchQuery.value,
-    offset: page.value * 100,
+    search: debouncedSearch.value,
 }));
-const { data: stationsData, refresh } = useStations(params);
-
-function processStations(newData: PaginatedResponse<Station> | undefined) {
-    if (!newData) return;
-    if (page.value === 0) {
-        allStations.value = newData.results;
-    } else {
-        allStations.value = [...allStations.value, ...newData.results];
-    }
-    hasMore.value = !!newData.next;
-}
-
-watch(stationsData, processStations);
-onMounted(() => {
-    processStations(stationsData.value);
-});
+const { allStations, onLoadMore, hasMore } =
+    useStationsWithInfiniteScroll(params);
 
 function onSelectStation(_event: PointerEvent, station: Station) {
     deviationStore.setStations([...deviationStore.selectedStations, station]);
@@ -51,18 +34,11 @@ const unselectedFilteredStations = computed(() =>
         : allStations.value.filter((s) => !isStationSelected(s)),
 );
 
-const debouncedSearch = refDebounced(searchQuery, 300);
-watch(debouncedSearch, () => {
-    page.value = 0;
-    refresh();
-});
-
 const sentinel = ref<HTMLElement | undefined>(undefined);
 
 function loadMore() {
     if (!hasMore.value) return;
-    page.value++;
-    refresh();
+    onLoadMore();
 }
 
 useIntersectionObserver(sentinel, ([entry]) => {
@@ -70,7 +46,7 @@ useIntersectionObserver(sentinel, ([entry]) => {
 });
 </script>
 <template>
-    <div class="flex flex-col gap-2 w-64 p-4 h-full max-h-158">
+    <div class="flex flex-col gap-2 w-full md:w-64 p-4 md:h-full max-h-158">
         <UInput
             v-model="searchQuery"
             trailing-icon="i-lucide-search"
@@ -79,10 +55,19 @@ useIntersectionObserver(sentinel, ([entry]) => {
             placeholder="Entrez le nom d'une station"
         />
         <div
-            v-if="selectedStations.length > 0"
+            v-if="selectedStations.length > 0 || includeNational"
             class="max-h-44 overflow-y-auto shrink-0"
         >
             <ul>
+                <li
+                    v-if="includeNational"
+                    class="cursor-pointer pr-2 font-bold py-1 text-sm flex items-center justify-between"
+                    :title="'France Métropolitaine'"
+                    @click="deviationStore.setIncludeNational(false)"
+                >
+                    <span>France Métropolitaine</span>
+                    <UIcon :name="'i-lucide-x'" class="shrink-0" />
+                </li>
                 <li
                     v-for="station in selectedStations"
                     :key="`selected-${station.code}`"
@@ -98,10 +83,19 @@ useIntersectionObserver(sentinel, ([entry]) => {
             </ul>
         </div>
 
-        <USeparator v-if="selectedStations.length > 0" />
+        <USeparator v-if="selectedStations.length > 0 || includeNational" />
 
         <div class="overflow-y-auto">
             <ul>
+                <li
+                    v-if="!includeNational"
+                    class="cursor-pointer pr-2 py-1 text-sm flex items-center justify-between"
+                    :title="'France Métropolitaine'"
+                    @click="deviationStore.setIncludeNational(true)"
+                >
+                    <span>France Métropolitaine</span>
+                    <UIcon :name="'i-lucide-plus'" class="shrink-0" />
+                </li>
                 <li
                     v-for="station in unselectedFilteredStations"
                     :key="`filtered-${station.code}`"

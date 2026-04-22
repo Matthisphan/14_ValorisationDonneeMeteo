@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ItnChart from "~/components/charts/ItnChart.vue";
+import ItnKpiPanel from "~/components/charts/ItnKpiPanel.vue";
 import PagesHero from "~/components/layout/PagesHero.vue";
 import SelectBar from "~/components/ui/commons/selectBar/selectBar.vue";
 import ChartLayout from "~/components/layout/ChartLayout.vue";
@@ -8,9 +9,9 @@ import { useItnSelectBarAdapter } from "~/adapters/itnSelectBarAdapter";
 const selectBarAdapter = useItnSelectBarAdapter();
 
 const heroData = {
-    title: "ITN",
+    title: "Indicateur Thermique National",
     description:
-        "L'Indicateur Thermique National est la température moyenne mesurée à l'échelle du pays (moyenne des températures minimales et maximales sur 30 stations météorologiques réparties de manière équilibrée en France).",
+        "L'Indicateur Thermique National (ITN) est la température moyenne mesurée à l'échelle du pays (moyenne des températures minimales et maximales sur 30 stations météorologiques réparties de manière équilibrée en France).",
 };
 </script>
 
@@ -25,7 +26,12 @@ const heroData = {
                 <SelectBar :adapter="selectBarAdapter" />
             </template>
             <template #chart>
-                <ItnChart :adapter="selectBarAdapter" class="px-3 py-2" />
+                <div class="flex gap-4 px-3 py-2">
+                    <div class="flex-1 min-w-0">
+                        <ItnChart :adapter="selectBarAdapter" />
+                    </div>
+                    <ItnKpiPanel />
+                </div>
             </template>
         </ChartLayout>
     </UContainer>

@@ -289,9 +289,7 @@ export function useTemperatureRecordsFake(
         const name_filter = (
             (p.station_name_filter as string) ?? ""
         ).toLowerCase();
-        const dept_filter = (
-            (p.departement_filter as string) ?? ""
-        ).toLowerCase();
+        const dept_filter = (p.departement_filter as string[]) ?? [];
 
         const record_type = (p.record_type as string) ?? "Chaud";
         const isChaud = record_type === "Chaud";
@@ -314,8 +312,8 @@ export function useTemperatureRecordsFake(
             );
         }
         if (dept_filter) {
-            stations = stations.filter((s) =>
-                s.departement.toLowerCase().includes(dept_filter),
+            stations = stations.filter((station) =>
+                dept_filter.includes(station.departement),
             );
         }
         if (temp_filter) {

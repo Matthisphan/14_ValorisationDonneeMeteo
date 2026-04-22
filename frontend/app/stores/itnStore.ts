@@ -1,5 +1,5 @@
 import type { NationalIndicatorParams } from "~/types/api";
-import { useCustomDate } from "#imports";
+import { useCustomDate, dateToStringYMD } from "#imports";
 import type {
     GranularityType,
     SliceType,
@@ -12,9 +12,10 @@ export const useItnStore = defineStore("itnStore", () => {
 
     // Date de début et date de fin
     const pickedDateStart = ref(dates.lastYear.value);
-    const pickedDateEnd = ref(dates.twoDaysAgo.value);
+    const pickedDateEnd = ref(dates.yesterday.value);
+    const maxDate = ref(dates.yesterday.value);
 
-    const granularity: Ref<GranularityType> = ref<GranularityType>("month");
+    const granularity: Ref<GranularityType> = ref<GranularityType>("day");
     const sliceTypeSwitchEnabled = ref(false);
     const sliceType: Ref<SliceType> = ref<SliceType>("full");
 
@@ -37,6 +38,19 @@ export const useItnStore = defineStore("itnStore", () => {
         granularity.value = value;
         if (value === "day") {
             sliceTypeSwitchEnabled.value = false;
+            pickedDateStart.value = dates.lastYear.value;
+            pickedDateEnd.value = dates.yesterday.value;
+            maxDate.value = dates.yesterday.value;
+        }
+        if (value === "month") {
+            pickedDateStart.value = dates.last10Year.value;
+            pickedDateEnd.value = dates.lastMonth.value;
+            maxDate.value = dates.lastMonth.value;
+        }
+        if (value === "year") {
+            pickedDateStart.value = dates.absoluteMinDataDate.value;
+            pickedDateEnd.value = dates.lastYear.value;
+            maxDate.value = dates.lastYear.value;
         }
     };
 
@@ -47,12 +61,8 @@ export const useItnStore = defineStore("itnStore", () => {
     };
 
     const params = computed<NationalIndicatorParams>(() => ({
-        date_start: pickedDateStart.value
-            .toISOString()
-            .substring(0, "YYYY-MM-DD".length),
-        date_end: pickedDateEnd.value
-            .toISOString()
-            .substring(0, "YYYY-MM-DD".length),
+        date_start: dateToStringYMD(pickedDateStart.value),
+        date_end: dateToStringYMD(pickedDateEnd.value),
         granularity: granularity.value,
         slice_type: sliceType.value,
         month_of_year: month_of_year.value,
@@ -65,6 +75,7 @@ export const useItnStore = defineStore("itnStore", () => {
         itnChartRef,
         pickedDateStart,
         pickedDateEnd,
+        maxDate,
         granularity,
         sliceTypeSwitchEnabled,
         sliceType,
