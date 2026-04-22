@@ -19,6 +19,33 @@ services:
       start_period: 40s
     restart: unless-stopped
 
+  backend:
+    build:
+      context: ./backend
+      args:
+        BACKEND_BASE_IMAGE: ${BACKEND_BASE_IMAGE:-python:3.12-slim-bookworm}
+    env_file:
+      - ./.env
+    ports:
+      - "8000:8000"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    networks:
+      - app_net
+      - bd_net
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        FRONTEND_BUILD_IMAGE: ${FRONTEND_BUILD_IMAGE:-node:24-alpine}
+        FRONTEND_RUNTIME_IMAGE: ${FRONTEND_RUNTIME_IMAGE:-node:24-alpine}
+    env_file:
+      - ./.env
+    networks:
+      - app_net
+
   nginx:
     image: nginx:1.29.5-alpine3.23-perl
     ports:
@@ -31,29 +58,28 @@ services:
     networks:
       - app_net
 
-  backend:
-    build:
-      context: ./backend
-    env_file:
-      - ./.env
-    depends_on:
-      timescaledb:
-        condition: service_healthy
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
     networks:
       - app_net
-      - bd_net
 
-  frontend:
-    build:
-      context: ./frontend
-    env_file:
-      - ./.env
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
     networks:
       - app_net
 
 volumes:
   timescaledb-data:
     driver: local
+
 networks:
   app_net:
   bd_net:
