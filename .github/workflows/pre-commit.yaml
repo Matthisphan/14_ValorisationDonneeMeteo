@@ -1,11 +1,14 @@
 name: pre-commit
 
 on:
+  # Controle qualite automatique avant merge sur PR.
   pull_request:
+  # Revalide aussi sur chaque push sur main.
   push:
     branches: [main]
 
 jobs:
+  # Verifie les hooks de qualite sur tous les fichiers modifies.
   pre-commit:
     runs-on: ubuntu-latest
 
@@ -21,4 +24,5 @@ jobs:
         run: pip install pre-commit
 
       - name: Run pre-commit
+        # Execute tous les hooks declares dans .pre-commit-config.yaml.
         run: pre-commit run --all-files
