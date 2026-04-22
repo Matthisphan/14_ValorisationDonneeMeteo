@@ -1,8 +1,10 @@
 name: CI Pipeline
 
 on:
+  # Pipeline complet lance sur push vers main (inclut publication Docker).
   push:
     branches: [main]
+  # Sur PR, on valide qualite/test/build mais le job de push reste bloque par condition.
   pull_request:
 
 jobs:
@@ -114,15 +116,18 @@ jobs:
   # =========================
   docker:
     runs-on: ubuntu-latest
+    # N'execute la phase securite Docker qu'apres succes backend + frontend.
     needs: [backend, frontend]
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Build Docker image
+        # Build local des services pour detecter les regressions Dockerfile/compose.
         run: docker compose -f docker-compose.test.yml build
 
       - name: Run Trivy scan
+        # Scan du filesystem du repo (dependencies, Dockerfile, config) et export JSON.
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
@@ -141,7 +146,9 @@ jobs:
   # =========================
   push:
     runs-on: ubuntu-latest
+    # Publication seulement si securite Docker terminee avec succes.
     needs: docker
+    # Le push des images est volontairement limite aux executions sur la branche main.
     if: github.ref == 'refs/heads/main'
 
     steps:
@@ -154,6 +161,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Setup Docker Buildx
+        # Builder moderne requis pour les options avancees de docker/build-push-action.
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push backend image (Docker Hub)
@@ -162,6 +170,8 @@ jobs:
           context: ./backend
           file: ./backend/Dockerfile
           push: true
+          # Renseigner cette variable GitHub Actions avec une image DHI pour activer le durcissement.
+          # Si la variable est absente, fallback sur l'image de base standard.
           build-args: |
             BACKEND_BASE_IMAGE=${{ vars.BACKEND_BASE_IMAGE || 'python:3.12-slim-bookworm' }}
           tags: |
@@ -174,6 +184,8 @@ jobs:
           context: ./frontend
           file: ./frontend/Dockerfile
           push: true
+          # Renseigner ces variables GitHub Actions avec des images DHI build/runtime.
+          # Si absentes, fallback sur node:24-alpine pour maintenir la compatibilite.
           build-args: |
             FRONTEND_BUILD_IMAGE=${{ vars.FRONTEND_BUILD_IMAGE || 'node:24-alpine' }}
             FRONTEND_RUNTIME_IMAGE=${{ vars.FRONTEND_RUNTIME_IMAGE || 'node:24-alpine' }}
