@@ -1,0 +1,9 @@
+# Exclut les artefacts locaux qui perturbent uv sync en image durcie
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.pyc
+*.pyo
+*.pyd
