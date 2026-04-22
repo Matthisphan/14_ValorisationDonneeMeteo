@@ -11,9 +11,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 COPY --from=ghcr.io/astral-sh/uv:0.10.0 /uv /uvx /bin/
 
 COPY . .
-# Installe strictement les dependances lockees (reproductible en CI).
-RUN uv sync --locked
+# Exec form: evite /bin/sh (absent sur certaines images DHI durcies).
+RUN ["/bin/uv", "sync", "--locked"]
 
 EXPOSE 8000
 # Serveur WSGI de prod avec logs sur stdout/stderr pour GitHub Actions et Docker logs.
-CMD ["uv", "run", "gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "info"]
+CMD ["/bin/uv", "run", "gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "info"]
