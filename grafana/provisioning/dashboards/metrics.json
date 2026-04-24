@@ -1,0 +1,52 @@
+{
+  "title": "?? Django Backend Metrics",
+  "uid": "django-metrics-dashboard",
+  "version": 1,
+  "panels": [
+    {
+      "title": "?? Backend Service Status",
+      "targets": [
+        {
+          "expr": "up{job=\"django\"}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "?? HTTP Requests Rate (5m avg)",
+      "targets": [
+        {
+          "expr": "rate(django_http_requests_total{job=\"django\"}[5m])",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "?? Request Latency (p95, 5m avg)",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(django_http_request_duration_seconds_bucket{job=\"django\"}[5m])) * 1000",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "??? Database Query Rate",
+      "targets": [
+        {
+          "expr": "rate(django_db_execute_total{job=\"django\"}[5m])",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "?? Model Save Rate",
+      "targets": [
+        {
+          "expr": "rate(django_model_saves_total{job=\"django\"}[5m])",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

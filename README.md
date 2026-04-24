@@ -15,6 +15,7 @@ Consultez les README de chaque sous-projet :
 
 - [Backend](backend/README.md)
 - [Frontend](frontend/README.md)
+- [Monitoring & Observability](MONITORING.md)
 
 ## Images Docker durcies (DHI)
 
@@ -231,4 +232,6 @@ npm install --legacy-peer-deps
 - **Frontend** : ESLint + Prettier
 - **Commun** : vérification des conflits, fins de ligne, etc.
 
-![CI](https://github.com/TON_USER/TON_REPO/actions/workflows/ci.yml/badge.svg)
+## CI/CD Status
+
+[![CI Pipeline](https://github.com/Matthisphan/14_ValorisationDonneeMeteo/actions/workflows/ci.yml/badge.svg)](https://github.com/Matthisphan/14_ValorisationDonneeMeteo/actions/workflows/ci.yml)

@@ -127,7 +127,7 @@ jobs:
         run: docker compose -f docker-compose.test.yml build
 
       - name: Run Trivy scan
-        # Scan du filesystem du repo (dependencies, Dockerfile, config) et export JSON.
+        # Scan du filesystem du repo (dependencies, Dockerfile, config) et export JSON + SBOM.
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
@@ -135,11 +135,22 @@ jobs:
           format: json
           output: trivy-report.json
 
-      - name: Upload Trivy report
+      - name: Generate Trivy SBOM
+        # Génère le SBOM (Software Bill of Materials) pour améliorer la supply chain security.
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: cyclonedx
+          output: trivy-sbom.json
+
+      - name: Upload Trivy report and SBOM
         uses: actions/upload-artifact@v4
         with:
-          name: trivy-report
-          path: trivy-report.json
+          name: trivy-security-reports
+          path: |
+            trivy-report.json
+            trivy-sbom.json
 
   # =========================
   # PUSH DOCKER
@@ -154,11 +165,70 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve base images with fallback
+        id: resolve-images
+        shell: bash
+        env:
+          BACKEND_BASE_IMAGE_RAW: ${{ vars.BACKEND_BASE_IMAGE }}
+          FRONTEND_BUILD_IMAGE_RAW: ${{ vars.FRONTEND_BUILD_IMAGE }}
+          FRONTEND_RUNTIME_IMAGE_RAW: ${{ vars.FRONTEND_RUNTIME_IMAGE }}
+          DHI_USERNAME: ${{ secrets.DHI_USERNAME }}
+          DHI_PASSWORD: ${{ secrets.DHI_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          backend_base_image="${BACKEND_BASE_IMAGE_RAW:-python:3.12-slim-bookworm}"
+          frontend_build_image="${FRONTEND_BUILD_IMAGE_RAW:-node:24-alpine}"
+          frontend_runtime_image="${FRONTEND_RUNTIME_IMAGE_RAW:-node:24-alpine}"
+
+          requires_dhi_auth=false
+          dhi_fallback_applied=false
+
+          # Check if DHI images are configured
+          if [[ "$backend_base_image" == dhi.io/* ]] || [[ "$frontend_build_image" == dhi.io/* ]] || [[ "$frontend_runtime_image" == dhi.io/* ]]; then
+            # DHI images requested
+            if [[ -z "${DHI_USERNAME}" || -z "${DHI_PASSWORD}" ]]; then
+              # DHI credentials missing: apply fallback to public images
+              echo "⚠️  DHI images configured but credentials missing. Falling back to public images."
+              backend_base_image="python:3.12-slim-bookworm"
+              frontend_build_image="node:24-alpine"
+              frontend_runtime_image="node:24-alpine"
+              dhi_fallback_applied=true
+            else
+              # DHI credentials available
+              requires_dhi_auth=true
+            fi
+          fi
+
+          echo "backend_base_image=$backend_base_image" >> "$GITHUB_OUTPUT"
+          echo "frontend_build_image=$frontend_build_image" >> "$GITHUB_OUTPUT"
+          echo "frontend_runtime_image=$frontend_runtime_image" >> "$GITHUB_OUTPUT"
+          echo "requires_dhi_auth=$requires_dhi_auth" >> "$GITHUB_OUTPUT"
+          echo "dhi_fallback_applied=$dhi_fallback_applied" >> "$GITHUB_OUTPUT"
+
+      - name: Display image resolution
+        shell: bash
+        run: |
+          echo "Backend base image: ${{ steps.resolve-images.outputs.backend_base_image }}"
+          echo "Frontend build image: ${{ steps.resolve-images.outputs.frontend_build_image }}"
+          echo "Frontend runtime image: ${{ steps.resolve-images.outputs.frontend_runtime_image }}"
+          if [[ "${{ steps.resolve-images.outputs.dhi_fallback_applied }}" == "true" ]]; then
+            echo "⚠️  DHI credentials not found; using public images instead."
+          fi
+
       - name: Login Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Login DHI registry (if credentials available)
+        if: steps.resolve-images.outputs.requires_dhi_auth == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DHI_USERNAME }}
+          password: ${{ secrets.DHI_PASSWORD }}
 
       - name: Setup Docker Buildx
         # Builder moderne requis pour les options avancees de docker/build-push-action.
@@ -173,7 +243,7 @@ jobs:
           # Renseigner cette variable GitHub Actions avec une image DHI pour activer le durcissement.
           # Si la variable est absente, fallback sur l'image de base standard.
           build-args: |
-            BACKEND_BASE_IMAGE=${{ vars.BACKEND_BASE_IMAGE || 'python:3.12-slim-bookworm' }}
+            BACKEND_BASE_IMAGE=${{ steps.resolve-images.outputs.backend_base_image }}
           tags: |
             nyons/14-valorisationdonneemeteo-backend:latest
             nyons/14-valorisationdonneemeteo-backend:${{ github.sha }}
@@ -187,8 +257,8 @@ jobs:
           # Renseigner ces variables GitHub Actions avec des images DHI build/runtime.
           # Si absentes, fallback sur node:24-alpine pour maintenir la compatibilite.
           build-args: |
-            FRONTEND_BUILD_IMAGE=${{ vars.FRONTEND_BUILD_IMAGE || 'node:24-alpine' }}
-            FRONTEND_RUNTIME_IMAGE=${{ vars.FRONTEND_RUNTIME_IMAGE || 'node:24-alpine' }}
+            FRONTEND_BUILD_IMAGE=${{ steps.resolve-images.outputs.frontend_build_image }}
+            FRONTEND_RUNTIME_IMAGE=${{ steps.resolve-images.outputs.frontend_runtime_image }}
           tags: |
             nyons/14-valorisationdonneemeteo-frontend:latest
             nyons/14-valorisationdonneemeteo-frontend:${{ github.sha }}

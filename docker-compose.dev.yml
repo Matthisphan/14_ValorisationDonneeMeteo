@@ -69,15 +69,27 @@ services:
       - app_net
 
   grafana:
-    image: grafana/grafana
+    image: grafana/grafana:latest
     container_name: grafana
     ports:
       - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: admin
+      GF_USERS_ALLOW_SIGN_UP: false
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - grafana-storage:/var/lib/grafana
+    depends_on:
+      - prometheus
     networks:
       - app_net
 
 volumes:
   timescaledb-data:
+    driver: local
+  grafana-storage:
     driver: local
 
 networks:
