@@ -92,36 +92,40 @@ Le dashboard se met à jour toutes les 10 secondes.
 
 ## Métriques à monitorer
 
-Métriques exposées par **django-prometheus** sur l'endpoint `/metrics` :
+Métriques réellement exposées par **django-prometheus** sur l'endpoint `/metrics` :
 
 ```promql
 # Status du service Django
 up{job="django"}
 
-# Requêtes HTTP totales
-rate(django_http_requests_total[5m])
+# Requêtes HTTP par méthode
+sum(rate(django_http_requests_total_by_method_total{job="django"}[5m])) by (method)
 
-# Latence des requêtes (95e centile)
-django_http_request_duration_seconds_bucket{le="0.5"}
+# Latence p95 par vue et méthode
+histogram_quantile(0.95, sum(rate(django_http_requests_latency_seconds_by_view_method_bucket{job="django"}[5m])) by (le, view, method))
 
-# Exceptions non capturées
-django_http_requests_unknown_latency_total
+# Requêtes HTTP par vue
+sum(rate(django_http_requests_total_by_view_transport_method_total{job="django"}[5m])) by (view)
 
-# Requêtes par vue
-rate(django_http_requests_total{job="django", view="*"}[5m])
+# Réponses HTTP par statut
+sum(rate(django_http_responses_total_by_status_total{job="django"}[5m])) by (status)
 
-# Database queries
-rate(django_db_execute_total[5m])
-
-# Model saves
-rate(django_model_saves_total[5m])
+# Exceptions par vue
+sum(rate(django_http_exceptions_total_by_view_total{job="django"}[5m])) by (view)
 ```
 
-**Exemple de requête Prometheus :**
-Accède à http://localhost:9090/graph et tape :
-```
-rate(django_http_requests_total[5m])
-```
+### Dashboard Grafana fourni
+
+Le dashboard auto-provisionné **Django Backend Metrics** contient :
+
+- Backend Service Status
+- HTTP Requests by Method
+- Request Latency p95
+- HTTP Requests by View
+- HTTP Responses by Status
+- Exceptions by View
+
+**Astuce** : si les panels sont vides, vérifie d'abord dans Prometheus que la cible est `UP`, puis génère quelques requêtes vers le backend avant de rafraîchir Grafana.
 
 ## Dépannage
 

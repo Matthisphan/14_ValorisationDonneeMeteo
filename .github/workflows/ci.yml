@@ -123,7 +123,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build Docker image
-        # Build local des services pour detecter les regressions Dockerfile/compose.
         run: docker compose -f docker-compose.test.yml build
 
       - name: Run Trivy scan
@@ -189,7 +188,7 @@ jobs:
             # DHI images requested
             if [[ -z "${DHI_USERNAME}" || -z "${DHI_PASSWORD}" ]]; then
               # DHI credentials missing: apply fallback to public images
-              echo "⚠️  DHI images configured but credentials missing. Falling back to public images."
+              echo "DHI images configured but credentials missing. Falling back to public images."
               backend_base_image="python:3.12-slim-bookworm"
               frontend_build_image="node:24-alpine"
               frontend_runtime_image="node:24-alpine"
@@ -213,7 +212,7 @@ jobs:
           echo "Frontend build image: ${{ steps.resolve-images.outputs.frontend_build_image }}"
           echo "Frontend runtime image: ${{ steps.resolve-images.outputs.frontend_runtime_image }}"
           if [[ "${{ steps.resolve-images.outputs.dhi_fallback_applied }}" == "true" ]]; then
-            echo "⚠️  DHI credentials not found; using public images instead."
+            echo "DHI credentials not found; using public images instead."
           fi
 
       - name: Login Docker Hub

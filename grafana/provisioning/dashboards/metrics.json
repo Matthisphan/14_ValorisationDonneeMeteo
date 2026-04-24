@@ -1,50 +1,77 @@
 {
-  "title": "?? Django Backend Metrics",
+  "title": "Django Backend Metrics",
   "uid": "django-metrics-dashboard",
-  "version": 1,
+  "version": 2,
   "panels": [
     {
-      "title": "?? Backend Service Status",
+      "type": "timeseries",
+      "title": "Backend Service Status",
+      "datasource": "Prometheus",
       "targets": [
         {
           "expr": "up{job=\"django\"}",
-          "refId": "A"
+          "refId": "A",
+          "legendFormat": "backend"
         }
       ]
     },
     {
-      "title": "?? HTTP Requests Rate (5m avg)",
+      "type": "timeseries",
+      "title": "HTTP Requests by Method",
+      "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "rate(django_http_requests_total{job=\"django\"}[5m])",
-          "refId": "A"
+          "expr": "sum(rate(django_http_requests_total_by_method_total{job=\"django\"}[5m])) by (method)",
+          "refId": "A",
+          "legendFormat": "{{method}}"
         }
       ]
     },
     {
-      "title": "?? Request Latency (p95, 5m avg)",
+      "type": "timeseries",
+      "title": "Request Latency p95",
+      "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, rate(django_http_request_duration_seconds_bucket{job=\"django\"}[5m])) * 1000",
-          "refId": "A"
+          "expr": "histogram_quantile(0.95, sum(rate(django_http_requests_latency_seconds_by_view_method_bucket{job=\"django\"}[5m])) by (le, view, method)) * 1000",
+          "refId": "A",
+          "legendFormat": "{{view}} {{method}}"
         }
       ]
     },
     {
-      "title": "??? Database Query Rate",
+      "type": "timeseries",
+      "title": "HTTP Requests by View",
+      "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "rate(django_db_execute_total{job=\"django\"}[5m])",
-          "refId": "A"
+          "expr": "sum(rate(django_http_requests_total_by_view_transport_method_total{job=\"django\"}[5m])) by (view)",
+          "refId": "A",
+          "legendFormat": "{{view}}"
         }
       ]
     },
     {
-      "title": "?? Model Save Rate",
+      "type": "timeseries",
+      "title": "HTTP Responses by Status",
+      "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "rate(django_model_saves_total{job=\"django\"}[5m])",
-          "refId": "A"
+          "expr": "sum(rate(django_http_responses_total_by_status_total{job=\"django\"}[5m])) by (status)",
+          "refId": "A",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Exceptions by View",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(django_http_exceptions_total_by_view_total{job=\"django\"}[5m])) by (view)",
+          "refId": "A",
+          "legendFormat": "{{view}}"
         }
       ]
     }
