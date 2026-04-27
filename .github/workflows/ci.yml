@@ -41,7 +41,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 #history complète nécessaire pour certains outils de test et couverture
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -67,7 +67,8 @@ jobs:
           python manage.py migrate
 
       - name: Run tests with report
-        run: |
+        run:
+          | # Génère un rapport JUnit XML pour intégration avec GitHub Actions.
           cd backend
           pytest --junitxml=report.xml
 
@@ -135,7 +136,7 @@ jobs:
       - name: Build Docker images
         run: docker compose -f docker-compose.test.yml build
 
-      - name: Run Trivy scan
+      - name: Run Trivy scan # check vuln sur filesystem (code source + images montées)
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
@@ -143,7 +144,7 @@ jobs:
           format: json
           output: trivy-report.json
 
-      - name: Generate Trivy SBOM
+      - name: Generate Trivy SBOM # génère un SBOM (dépendances/versions) pour analyse de la composition des images et code source.
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
@@ -151,7 +152,7 @@ jobs:
           format: cyclonedx
           output: trivy-sbom.json
 
-      - name: Upload Trivy report and SBOM
+      - name: Upload Trivy report and SBOM # uploade les rapports de vulnérabilité et SBOM en tant qu'artifacts pour analyse post-run.
         uses: actions/upload-artifact@v4
         with:
           name: trivy-security-reports
