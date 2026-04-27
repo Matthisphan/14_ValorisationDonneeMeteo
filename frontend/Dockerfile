@@ -3,8 +3,6 @@ ARG FRONTEND_RUNTIME_IMAGE=node:24-alpine
 
 FROM ${FRONTEND_BUILD_IMAGE} AS build
 
-USER root
-
 WORKDIR /app
 
 COPY package*.json ./
@@ -12,7 +10,7 @@ COPY package*.json ./
 RUN ["node", "--version"]
 RUN ["npm", "--version"]
 
-RUN ["npm", "install", "--verbose"]
+RUN ["npm", "install"]
 
 COPY . .
 
