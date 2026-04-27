@@ -1,10 +1,11 @@
 name: CI Pipeline
 
 on:
-  # Pipeline complet lance sur push vers main (inclut publication Docker).
+  # Pipeline complet lancé sur push vers main (inclut publication Docker).
   push:
     branches: [main]
-  # Sur PR, on valide qualite/test/build mais le job de push reste bloque par condition.
+
+  # Sur PR, on valide qualité/test/build mais le job de push reste bloqué par condition.
   pull_request:
 
 jobs:
@@ -37,7 +38,8 @@ jobs:
       DB_PORT: 5432
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -51,7 +53,7 @@ jobs:
           cd backend
           pip install .[dev]
 
-      - name: Wait for DB
+      - name: Wait for database
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client
@@ -64,18 +66,18 @@ jobs:
           cd backend
           python manage.py migrate
 
-      - name: Run tests (with report)
+      - name: Run tests with report
         run: |
           cd backend
           pytest --junitxml=report.xml
 
-      - name: Upload test report
+      - name: Upload backend test report
         uses: actions/upload-artifact@v4
         with:
           name: backend-test-report
           path: backend/report.xml
 
-      - name: Lint check (Ruff)
+      - name: Lint check with Ruff
         run: |
           cd backend
           ruff check . --fix
@@ -87,7 +89,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -116,11 +119,11 @@ jobs:
   # =========================
   docker:
     runs-on: ubuntu-latest
-    # N'execute la phase securite Docker qu'apres succes backend + frontend.
-    needs: [ backend, frontend ]
+    needs: [backend, frontend]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Login DHI registry
         uses: docker/login-action@v3
@@ -129,11 +132,10 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build Docker image
+      - name: Build Docker images
         run: docker compose -f docker-compose.test.yml build
 
       - name: Run Trivy scan
-        # Scan du filesystem du repo (dependencies, Dockerfile, config) et export JSON + SBOM.
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
@@ -142,7 +144,6 @@ jobs:
           output: trivy-report.json
 
       - name: Generate Trivy SBOM
-        # Génère le SBOM (Software Bill of Materials) pour améliorer la supply chain security.
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
@@ -163,23 +164,22 @@ jobs:
   # =========================
   push:
     runs-on: ubuntu-latest
-    # Publication seulement si securite Docker terminee avec succes.
     needs: docker
-    # Le push des images est volontairement limite aux executions sur la branche main.
+
+    # Publication uniquement sur main.
     if: github.ref == 'refs/heads/main'
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Resolve base images with fallback
+      - name: Resolve base images
         id: resolve-images
         shell: bash
         env:
           BACKEND_BASE_IMAGE_RAW: ${{ vars.BACKEND_BASE_IMAGE }}
           FRONTEND_BUILD_IMAGE_RAW: ${{ vars.FRONTEND_BUILD_IMAGE }}
           FRONTEND_RUNTIME_IMAGE_RAW: ${{ vars.FRONTEND_RUNTIME_IMAGE }}
-          DHI_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DHI_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         run: |
           set -euo pipefail
 
@@ -187,30 +187,9 @@ jobs:
           frontend_build_image="${FRONTEND_BUILD_IMAGE_RAW:-node:24-alpine}"
           frontend_runtime_image="${FRONTEND_RUNTIME_IMAGE_RAW:-node:24-alpine}"
 
-          requires_dhi_auth=false
-          dhi_fallback_applied=false
-
-          # Check if DHI images are configured
-          if [[ "$backend_base_image" == dhi.io/* ]] || [[ "$frontend_build_image" == dhi.io/* ]] || [[ "$frontend_runtime_image" == dhi.io/* ]]; then
-            # DHI images requested
-            if [[ -z "${DHI_USERNAME}" || -z "${DHI_PASSWORD}" ]]; then
-              # DHI credentials missing: apply fallback to public images
-              echo "DHI images configured but credentials missing. Falling back to public images."
-              backend_base_image="python:3.12-slim-bookworm"
-              frontend_build_image="node:24-alpine"
-              frontend_runtime_image="node:24-alpine"
-              dhi_fallback_applied=true
-            else
-              # DHI credentials available
-              requires_dhi_auth=true
-            fi
-          fi
-
           echo "backend_base_image=$backend_base_image" >> "$GITHUB_OUTPUT"
           echo "frontend_build_image=$frontend_build_image" >> "$GITHUB_OUTPUT"
           echo "frontend_runtime_image=$frontend_runtime_image" >> "$GITHUB_OUTPUT"
-          echo "requires_dhi_auth=$requires_dhi_auth" >> "$GITHUB_OUTPUT"
-          echo "dhi_fallback_applied=$dhi_fallback_applied" >> "$GITHUB_OUTPUT"
 
       - name: Display image resolution
         shell: bash
@@ -218,9 +197,6 @@ jobs:
           echo "Backend base image: ${{ steps.resolve-images.outputs.backend_base_image }}"
           echo "Frontend build image: ${{ steps.resolve-images.outputs.frontend_build_image }}"
           echo "Frontend runtime image: ${{ steps.resolve-images.outputs.frontend_runtime_image }}"
-          if [[ "${{ steps.resolve-images.outputs.dhi_fallback_applied }}" == "true" ]]; then
-            echo "DHI credentials not found; using public images instead."
-          fi
 
       - name: Login Docker Hub
         uses: docker/login-action@v3
@@ -228,8 +204,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Login DHI registry (if credentials available)
-        if: steps.resolve-images.outputs.requires_dhi_auth == 'true'
+      - name: Login DHI registry
         uses: docker/login-action@v3
         with:
           registry: dhi.io
@@ -237,31 +212,26 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Setup Docker Buildx
-        # Builder moderne requis pour les options avancees de docker/build-push-action.
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push backend image (Docker Hub)
+      - name: Build and push backend image
         uses: docker/build-push-action@v6
         with:
           context: ./backend
           file: ./backend/Dockerfile
           push: true
-          # Renseigner cette variable GitHub Actions avec une image DHI pour activer le durcissement.
-          # Si la variable est absente, fallback sur l'image de base standard.
           build-args: |
             BACKEND_BASE_IMAGE=${{ steps.resolve-images.outputs.backend_base_image }}
           tags: |
             nyons/14-valorisationdonneemeteo-backend:latest
             nyons/14-valorisationdonneemeteo-backend:${{ github.sha }}
 
-      - name: Build and push frontend image (Docker Hub)
+      - name: Build and push frontend image
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
           file: ./frontend/Dockerfile
           push: true
-          # Renseigner ces variables GitHub Actions avec des images DHI build/runtime.
-          # Si absentes, fallback sur node:24-alpine pour maintenir la compatibilite.
           build-args: |
             FRONTEND_BUILD_IMAGE=${{ steps.resolve-images.outputs.frontend_build_image }}
             FRONTEND_RUNTIME_IMAGE=${{ steps.resolve-images.outputs.frontend_runtime_image }}
