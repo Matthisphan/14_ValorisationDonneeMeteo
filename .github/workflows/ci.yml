@@ -152,13 +152,14 @@ jobs:
           format: cyclonedx
           output: trivy-sbom.json
 
-      - name: Upload Trivy report and SBOM # uploade les rapports de vulnérabilité et SBOM en tant qu'artifacts pour analyse post-run.
+      - name: Upload Trivy report, SBOM and VEX # uploade les rapports de vulnérabilité, SBOM et VEX en tant qu'artifacts pour analyse post-run.
         uses: actions/upload-artifact@v4
         with:
           name: trivy-security-reports
           path: |
             trivy-report.json
             trivy-sbom.json
+            vex.json
 
   # =========================
   # PUSH DOCKER

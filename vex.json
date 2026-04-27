@@ -1,0 +1,27 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2",
+  "@id": "urn:uuid:8d6df6e2-4e14-4a6d-9a41-8df7d9f3a1b2",
+  "author": "14_ValorisationDonneeMeteo maintainers",
+  "role": "document creator",
+  "timestamp": "2026-04-27T00:00:00Z",
+  "version": 1,
+  "statements": [],
+  "product": {
+    "name": "14_ValorisationDonneeMeteo",
+    "components": [
+      {
+        "name": "backend",
+        "path": "backend/Dockerfile"
+      },
+      {
+        "name": "frontend",
+        "path": "frontend/Dockerfile"
+      },
+      {
+        "name": "grafana provisioning",
+        "path": "grafana/provisioning"
+      }
+    ]
+  },
+  "notes": "Template VEX document for the current repository state. Populate statements when a concrete vulnerability assessment is available."
+}
